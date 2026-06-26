@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>StratSeg | Proposta de Seguro Residencial</title>
+
+<script src="https://cdn.tailwindcss.com"></script>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+
+<script>
+    tailwind.config = {
+        theme: {
+            extend: {
+                fontFamily: {
+                    sans: ['Inter', 'sans-serif'],
+                    heading: ['Montserrat', 'sans-serif'],
+                    mono: ['SF Mono', 'Roboto Mono', 'monospace'],
+                },
+                colors: {
+                    strat: {
+                        navy: '#1a2542',
+                        royal: '#3a5ba8',
+                        amber: '#f5a623',
+                        'amber-hover': '#e8920a',
+                        gray: '#f4f5f8',
+                        border: '#e2e8f0',
+                        text: '#475569'
+                    }
+                },
+                boxShadow: {
+                    'soft': '0 10px 40px -10px rgba(26, 37, 66, 0.08)',
+                    'glow': '0 0 0 1px rgba(245, 166, 35, 0.25), 0 20px 40px -12px rgba(26, 37, 66, 0.18)',
+                }
+            }
+        }
+    }
+</script>
+
+<style>
+    body { background-color: #f4f5f8; color: #334155; }
+
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+
+    .fade-in-up { opacity: 0; animation: fadeInUp 0.7s cubic-bezier(0.4,0,0.2,1) forwards; }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(18px); } to { opacity: 1; transform: translateY(0); } }
+
+    @keyframes pulse-glow {
+        0% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0.55); }
+        70% { box-shadow: 0 0 0 9px rgba(245, 166, 35, 0); }
+        100% { box-shadow: 0 0 0 0 rgba(245, 166, 35, 0); }
+    }
+
+    .plan-row { transition: transform 0.35s cubic-bezier(0.4,0,0.2,1), box-shadow 0.35s cubic-bezier(0.4,0,0.2,1); border-left-width: 5px; border-left-style: solid; }
+    .plan-row:hover { transform: translateX(3px); box-shadow: 0 14px 30px -10px rgba(26,37,66,0.12); }
+    .plan-row.selected { box-shadow: 0 0 0 1px rgba(245,166,35,0.45), 0 20px 40px -12px rgba(26,37,66,0.18) !important; }
+    .plan-row.is-best { background: linear-gradient(180deg, #fffaf0 0%, #ffffff 14%); }
+
+    .accordion-wrapper { display: grid; grid-template-rows: 0fr; transition: grid-template-rows 0.45s cubic-bezier(0.4,0,0.2,1); }
+    .accordion-wrapper.open { grid-template-rows: 1fr; }
+    .accordion-wrapper > div { overflow: hidden; min-height: 0; }
+    .accordion-toggle .caret { transition: transform 0.35s cubic-bezier(0.4,0,0.2,1); }
+    .accordion-toggle.open .caret { transform: rotate(180deg); }
+
+    .stepper-btn { transition: all 0.2s ease; }
+    .stepper-btn:disabled { opacity: 0.25; cursor: not-allowed; }
+    .stepper-btn:not(:disabled):hover { background: #1a2542; border-color: #1a2542; color: #fff; }
+    .odometer { font-variant-numeric: tabular-nums; }
+
+    .price-fade { transition: opacity 0.15s ease; }
+    .price-fade.fading { opacity: 0; }
+
+    .cta-btn { transition: all 0.3s cubic-bezier(0.4,0,0.2,1); }
+
+    .glow-orb { filter: blur(70px); pointer-events: none; }
+
+    /* Régua comparativa de preços */
+    .ruler-dot { transition: transform 0.3s cubic-bezier(0.4,0,0.2,1), box-shadow 0.3s ease; cursor: pointer; }
+    .ruler-dot:hover, .ruler-dot.ruler-active { transform: scale(1.6); box-shadow: 0 0 0 5px rgba(0,0,0,0.05); }
+    .ruler-label { transition: opacity 0.3s ease, transform 0.3s ease; }
+
+    @media (prefers-reduced-motion: reduce) {
+        * { animation: none !important; transition: none !important; }
+        .fade-in-up { opacity: 1; }
+    }
+</style>
+</head>
+<body class="antialiased">
+
+<!-- BARRA SUPERIOR -->
+<header class="sticky top-0 z-50 backdrop-blur-md border-b border-white/10" style="background: rgba(26,37,66,0.92);">
+    <div class="max-w-6xl mx-auto px-6 lg:px-10 py-3 flex items-center justify-between">
+        <img src="https://www.stratseg.com/assets/STRATSEG%20BRANCO.png" alt="StratSeg" class="h-5 w-auto">
+        <div class="hidden sm:flex items-center gap-2 text-[11px] font-mono text-slate-300 bg-white/5 border border-white/10 rounded-full px-3.5 py-1.5">
+            <span>Cotação Nº <span id="topbar-protocolo" class="text-white">—</span></span>
+            <span class="text-white/20">·</span>
+            <span>válida até <span id="topbar-validade" class="text-strat-amber font-semibold">—</span></span>
+        </div>
+    </div>
+</header>
+
+<!-- HERO / DOSSIÊ -->
+<section class="relative overflow-hidden" style="background:#1a2542;">
+    <div class="absolute -left-24 -top-24 w-80 h-80 bg-strat-royal rounded-full opacity-30 glow-orb"></div>
+    <div class="absolute -right-16 top-1/3 w-96 h-96 bg-strat-amber rounded-full opacity-[0.12] glow-orb"></div>
+
+    <div class="relative max-w-6xl mx-auto px-6 lg:px-10 pt-14 pb-12 lg:pt-20 lg:pb-16">
+        <p class="fade-in-up text-strat-amber text-xs font-bold uppercase tracking-[0.2em] mb-4" style="animation-delay:.05s;">Proposta personalizada</p>
+        <h1 class="fade-in-up font-heading font-extrabold text-white text-[2.1rem] leading-[1.15] lg:text-5xl lg:leading-[1.12] max-w-2xl" style="animation-delay:.12s;">
+            <span id="hero-name">Cliente</span>, sua casa em <span class="text-strat-amber" id="hero-cidade">—</span> já tem 5 propostas.
+        </h1>
+        <p class="fade-in-up text-slate-300 text-[15px] leading-relaxed mt-5 max-w-lg" style="animation-delay:.2s;">Levamos seu perfil a 5 seguradoras parceiras e organizamos tudo abaixo — do seguro mais econômico ao mais completo, sem letra miúda.</p>
+
+        <!-- Tira com os fatos do imóvel -->
+        <div class="fade-in-up mt-10 flex flex-col sm:flex-row rounded-2xl border border-white/10 bg-white/5 overflow-hidden divide-y divide-white/10 sm:divide-y-0" style="animation-delay:.3s;">
+            <div class="flex items-center gap-3 px-5 py-4 sm:border-r sm:border-white/10 sm:flex-1">
+                <i class="ph-bold ph-house-line text-strat-amber text-lg"></i>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Imóvel</div>
+                    <div class="text-sm text-white font-medium" id="fact-imovel">—</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 px-5 py-4 sm:border-r sm:border-white/10 sm:flex-1">
+                <i class="ph-bold ph-map-pin text-strat-amber text-lg"></i>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Localização</div>
+                    <div class="text-sm text-white font-medium" id="fact-local">—</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 px-5 py-4 sm:border-r sm:border-white/10 sm:flex-1">
+                <i class="ph-bold ph-calendar-check text-strat-amber text-lg"></i>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Vigência</div>
+                    <div class="text-sm text-white font-medium" id="fact-vigencia">—</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-3 px-5 py-4 sm:flex-1">
+                <i class="ph-bold ph-shield-check text-strat-amber text-lg"></i>
+                <div>
+                    <div class="text-[10px] uppercase tracking-wide text-slate-400 font-semibold">Importância segurada</div>
+                    <div class="text-sm text-white font-medium" id="fact-is">—</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- COMPARAÇÃO DE PLANOS -->
+<section class="max-w-6xl mx-auto px-6 lg:px-10 py-14 lg:py-20">
+    <p class="text-strat-royal text-xs font-bold uppercase tracking-[0.2em] mb-3">5 seguradoras · 1 perfil</p>
+    <h2 class="font-heading font-extrabold text-strat-navy text-[1.7rem] lg:text-3xl max-w-xl">Escolha a proteção certa pra sua casa de praia.</h2>
+    <p class="text-strat-text text-[14px] mt-3 max-w-xl">As 5 propostas, lado a lado. Veja primeiro a diferença real de preço entre elas — depois use as setas em cada uma pra explorar as opções de parcelamento.</p>
+
+    <div class="mt-12 mb-3" id="price-ruler"><!-- JS injeta a régua --></div>
+    <p class="text-[12px] text-slate-400 mb-8" id="ruler-caption"></p>
+
+    <div id="plans-list" class="flex flex-col gap-5">
+        <!-- JS injeta as linhas -->
+    </div>
+</section>
+
+<!-- RODAPÉ -->
+<footer style="background:#1a2542;">
+    <div class="max-w-6xl mx-auto px-6 lg:px-10 py-10">
+        <img src="https://www.stratseg.com/assets/STRATSEG%20BRANCO.png" alt="StratSeg" class="h-5 w-auto mb-4">
+        <p class="text-[11.5px] leading-relaxed text-slate-400 max-w-2xl">StratSeg Consultoria e Corretora de Seguros. Esta proposta é uma simulação comparativa baseada em cotação MDS Group e está sujeita a análise e confirmação da seguradora escolhida — valores podem ser alterados sem aviso prévio pelas seguradoras.</p>
+        <div class="mt-5 flex items-center gap-2 text-[13px] text-slate-300">
+            <i class="ph-bold ph-chat-circle-text text-strat-amber"></i>
+            <span>Dúvidas antes de decidir? <a href="#" id="footer-whatsapp" class="text-white font-semibold hover:text-strat-amber transition-colors">Fale com seu consultor StratSeg</a></span>
+        </div>
+    </div>
+</footer>
+
+<script>
+    // ============================================================
+    // DADOS DO LEAD E DAS COTAÇÕES — troque este bloco para reutilizar
+    // a página com outro cliente/PDF de cotação.
+    // ============================================================
+    const LEAD = {
+        firstName: 'Gabriel',
+        fullName: 'Gabriel Alves de Lima',
+        protocolo: '862088',
+        validoAte: '28/06/2026',
+        imovel: 'Casa térrea, alvenaria',
+        cidade: 'Guarujá',
+        local: 'Bertioga · Balneário Praia do Perequê, Guarujá – SP',
+        vigencia: '30/06/2026 → 30/06/2027',
+        is: 'R$ 750.000,00'
+    };
+
+    // Se a página foi aberta com ?nome=Algo na URL (é isso que o botão do e-mail manda,
+    // usando o mesmo {{nome}} que já personaliza o e-mail), usa esse nome no lugar do
+    // padrão acima — sem isso, cai no nome fixo definido em LEAD como respaldo.
+    const nomeFromUrl = new URLSearchParams(window.location.search).get('nome');
+    if (nomeFromUrl) {
+        LEAD.firstName = nomeFromUrl;
+        LEAD.fullName = nomeFromUrl;
+    }
+
+    // Número do WhatsApp do consultor responsável (formato internacional, só dígitos)
+    const CONSULTANT_WHATSAPP = '5511000000000'; // TODO: substituir pelo número real do consultor
+
+    // Cada opção de parcelamento como aparece na proposta original. "À vista" entra como a primeira opção quando a seguradora oferece.
+    const PLANS = [
+        {
+            seguradora: 'Allianz', cor: '#0A3D8F',
+            pagamento: 'Débito em conta', semJuros: true,
+            badge: { label: '★ Mais econômico', glow: true },
+            destaques: [
+                'Custo de defesa incluso, com IS integral',
+                'Indenização a valor de novo em todas as coberturas',
+                'Parcelamento sem juros'
+            ],
+            atencao: null,
+            orcamento: '484567544',
+            parcelamento: [
+                { label: '10x', parcela: 38.45, total: 384.47 }
+            ],
+            coberturas: [
+                ['Cobertura básica de incêndio', 'R$ 750.000,00', '—'],
+                ['Assistência', 'Essencial', '—'],
+                ['Danos elétricos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 600'],
+                ['Vendaval e granizo', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 700'],
+                ['Responsabilidade civil familiar', 'R$ 50.000,00', '—'],
+                ['Quebra de vidros/mármores/granitos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 150'],
+                ['Ruptura de tubulações', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 500'],
+                ['Indenização valor de novo', 'Contratada', 'Em todos os cálculos Allianz'],
+                ['Custo de defesa', 'R$ 10.000,00', '—']
+            ]
+        },
+        {
+            seguradora: 'Tokio Marine', cor: '#C8102E',
+            pagamento: 'Cartão de crédito', semJuros: true,
+            badge: { label: '5% de desconto aplicado', glow: false },
+            destaques: [
+                'Desconto de 5% já aplicado (Super Semana Residencial)',
+                'Indenização a valor de novo contratada',
+                'Parcelamento sem juros'
+            ],
+            atencao: null,
+            orcamento: '1034406111',
+            parcelamento: [
+                { label: 'À vista', parcela: null, total: 490.12 },
+                { label: '2x', parcela: 245.06, total: 490.12 },
+                { label: '3x', parcela: 163.37, total: 490.11 },
+                { label: '4x', parcela: 122.53, total: 490.12 },
+                { label: '5x', parcela: 98.02, total: 490.10 },
+                { label: '6x', parcela: 81.69, total: 490.14 },
+                { label: '7x', parcela: 70.02, total: 490.14 },
+                { label: '8x', parcela: 61.27, total: 490.16 },
+                { label: '9x', parcela: 54.46, total: 490.14 },
+                { label: '10x', parcela: 49.01, total: 490.10 },
+                { label: '11x', parcela: 44.56, total: 490.16 },
+                { label: '12x', parcela: 40.84, total: 490.08 }
+            ],
+            coberturas: [
+                ['Cobertura básica de incêndio', 'R$ 750.000,00', '—'],
+                ['Assistência', '24h Básica', '—'],
+                ['Danos elétricos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 700'],
+                ['Vendaval e granizo', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 600'],
+                ['Responsabilidade civil familiar', 'R$ 50.000,00', '—'],
+                ['Quebra de vidros/espelhos/mármores/granitos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 150'],
+                ['Ruptura de tubulações (vazamento)', 'R$ 10.000,00', '15% dos prejuízos, mín. R$ 500'],
+                ['Indenização valor de novo', 'Contratada', '—']
+            ]
+        },
+        {
+            seguradora: 'HDI Seguros', cor: '#111827',
+            pagamento: 'Cartão de crédito', semJuros: true,
+            badge: { label: 'Inclui placa solar', glow: false },
+            destaques: [
+                'Cobertura de placa solar incluída',
+                'Indenização por cláusula específica de valor novo',
+                'Parcelamento sem juros'
+            ],
+            atencao: null,
+            orcamento: '40926007',
+            parcelamento: [
+                { label: 'À vista', parcela: null, total: 630.93 },
+                { label: '2x', parcela: 315.47, total: 630.94 },
+                { label: '3x', parcela: 210.31, total: 630.93 },
+                { label: '4x', parcela: 157.73, total: 630.92 },
+                { label: '5x', parcela: 126.19, total: 630.95 },
+                { label: '6x', parcela: 105.16, total: 630.96 },
+                { label: '7x', parcela: 90.13, total: 630.91 },
+                { label: '8x', parcela: 78.87, total: 630.96 },
+                { label: '9x', parcela: 70.10, total: 630.90 },
+                { label: '10x', parcela: 63.09, total: 630.90 }
+            ],
+            coberturas: [
+                ['Incêndio/raio/explosão/queda de aeronave', 'R$ 750.000,00', '10% dos prejuízos (mín. R$ 350 p/ raio)'],
+                ['Assistência', 'Benefícios Essenciais', '—'],
+                ['Danos elétricos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 600'],
+                ['Vendaval/furacão/ciclone/tornado/granizo', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 450'],
+                ['Responsabilidade civil familiar', 'R$ 50.000,00', '—'],
+                ['Vidros, espelhos, mármores e granitos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 150'],
+                ['Placa solar', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 950 (+adicional)'],
+                ['Ruptura de tubulações', 'R$ 10.000,00', '15% dos prejuízos, mín. R$ 800'],
+                ['Indenização valor de novo', 'Cláusula específica', '—']
+            ]
+        },
+        {
+            seguradora: 'Yelum', cor: '#00A19A',
+            pagamento: 'Débito em conta', semJuros: true,
+            badge: null,
+            destaques: [
+                'Responsabilidade civil sem participação obrigatória',
+                'Menor franquia mínima em vidros/mármores (R$ 125)',
+                'Parcelamento sem juros'
+            ],
+            atencao: 'Não possui cobertura de indenização a valor de novo.',
+            orcamento: '13392638',
+            parcelamento: [
+                { label: 'À vista', parcela: null, total: 651.51 },
+                { label: '2x', parcela: 325.76, total: 651.52 },
+                { label: '3x', parcela: 217.17, total: 651.51 },
+                { label: '4x', parcela: 162.88, total: 651.52 },
+                { label: '5x', parcela: 130.31, total: 651.55 },
+                { label: '6x', parcela: 108.58, total: 651.48 },
+                { label: '7x', parcela: 93.08, total: 651.56 },
+                { label: '8x', parcela: 81.44, total: 651.52 },
+                { label: '9x', parcela: 72.39, total: 651.51 },
+                { label: '10x', parcela: 65.15, total: 651.50 }
+            ],
+            coberturas: [
+                ['Incêndio/explosão/fumaça/queda de aeronave', 'R$ 750.000,00', '10% dos prejuízos, mín. R$ 350 (raio)'],
+                ['Assistência', 'Básica', '—'],
+                ['Danos elétricos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 600'],
+                ['Vendaval/furacão/ciclone/tornado/granizo', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 550'],
+                ['Responsabilidade civil familiar', 'R$ 50.000,00', 'Sem participação obrigatória'],
+                ['Quebra de vidros/espelhos/mármores/granitos', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 125'],
+                ['Ruptura de tubulações', 'R$ 10.000,00', '10% dos prejuízos, mín. R$ 800'],
+                ['Indenização valor de novo', 'Indisponível', '—']
+            ]
+        },
+        {
+            seguradora: 'Porto Seguro', cor: '#004C97',
+            pagamento: 'Boleto bancário', semJuros: false,
+            badge: { label: 'Cobertura mais completa', glow: false },
+            destaques: [
+                'Sem franquia em incêndio e responsabilidade civil',
+                'Inclui vidros, espelhos, louças sanitárias e placa solar',
+                'Assistência 24h essencial gratuita'
+            ],
+            atencao: 'Parcelamento com juros — o total sobe a cada parcela adicional.',
+            orcamento: '2370295610600532',
+            parcelamento: [
+                { label: 'À vista', parcela: null, total: 1611.52 },
+                { label: '2x', parcela: 825.66, total: 1651.32 },
+                { label: '3x', parcela: 563.97, total: 1691.93 },
+                { label: '4x', parcela: 433.24, total: 1733.02 },
+                { label: '5x', parcela: 355.00, total: 1774.92 },
+                { label: '6x', parcela: 302.91, total: 1817.31 },
+                { label: '7x', parcela: 265.76, total: 1860.50 },
+                { label: '8x', parcela: 238.03, total: 1904.17 },
+                { label: '9x', parcela: 216.48, total: 1948.48 },
+                { label: '10x', parcela: 199.39, total: 1993.45 },
+                { label: '11x', parcela: 185.35, total: 2039.05 }
+            ],
+            coberturas: [
+                ['Incêndio, explosão, fumaça e queda de aeronave', 'R$ 750.000,00', 'Não há'],
+                ['Assistência', 'Plano Essencial — gratuito', '—'],
+                ['Danos elétricos', 'R$ 10.000,00', '15% das indenizações, mín. R$ 850'],
+                ['Vendaval, furacão, ciclone, tornado e granizo', 'R$ 10.000,00', '15% das indenizações, mín. R$ 850'],
+                ['Responsabilidade civil familiar', 'R$ 50.000,00', 'Não há'],
+                ['Vidros, espelhos e louças sanitárias', 'R$ 10.000,00', 'Não há'],
+                ['Placa solar', 'R$ 10.000,00', '10% das indenizações, mín. R$ 500'],
+                ['Ruptura de tubulações', 'R$ 10.000,00', '10% das indenizações, mín. R$ 1.000'],
+                ['Indenização valor de novo', 'Contratada', '—']
+            ]
+        }
+    ];
+
+    // Índice de parcelamento selecionado em cada card — começa no de mais parcelas (menor valor mensal)
+    const selected = PLANS.map(p => p.parcelamento.length - 1);
+
+    const fmt = (n) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+    function waLink(seguradora) {
+        const msg = `Olá! Sou ${LEAD.fullName} e gostaria de seguir com o plano da ${seguradora} (cotação ${LEAD.protocolo}).`;
+        return `https://wa.me/${CONSULTANT_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+    }
+
+    function waLinkGeneric() {
+        const msg = `Olá! Sou ${LEAD.fullName} e tenho dúvidas sobre minha cotação de seguro residencial (nº ${LEAD.protocolo}).`;
+        return `https://wa.me/${CONSULTANT_WHATSAPP}?text=${encodeURIComponent(msg)}`;
+    }
+
+    function renderHero() {
+        document.getElementById('topbar-protocolo').textContent = LEAD.protocolo;
+        document.getElementById('topbar-validade').textContent = LEAD.validoAte;
+        document.getElementById('hero-name').textContent = LEAD.firstName;
+        document.getElementById('hero-cidade').textContent = LEAD.cidade;
+        document.getElementById('fact-imovel').textContent = LEAD.imovel;
+        document.getElementById('fact-local').textContent = LEAD.local;
+        document.getElementById('fact-vigencia').textContent = LEAD.vigencia;
+        document.getElementById('fact-is').textContent = LEAD.is;
+        document.getElementById('footer-whatsapp').href = waLinkGeneric();
+    }
+
+    function coverageRows(coberturas) {
+        return coberturas.map(([nome, lmi, franquia]) => `
+            <tr class="border-t border-strat-border/70">
+                <td class="py-2 pr-3 text-[12.5px] text-strat-navy font-medium">${nome}</td>
+                <td class="py-2 pr-3 text-[12.5px] text-slate-500 whitespace-nowrap">${lmi}</td>
+                <td class="py-2 text-[12px] text-slate-400">${franquia}</td>
+            </tr>`).join('');
+    }
+
+    function priceBlock(p, i) {
+        const opt = p.parcelamento[selected[i]];
+        const isAvista = opt.parcela === null;
+        return `
+            <div class="price-fade text-center" id="price-${i}">
+                <div class="odometer font-mono font-extrabold text-[1.5rem] text-strat-navy leading-none">R$ ${fmt(isAvista ? opt.total : opt.parcela)}</div>
+                <div class="text-[10px] text-slate-400 uppercase tracking-wide mt-1">${isAvista ? 'à vista' : opt.label + (p.semJuros ? ' sem juros' : ' com juros')}</div>
+            </div>`;
+    }
+
+    function refTotal(p) { return p.parcelamento[p.parcelamento.length - 1].total; }
+
+    function renderRuler() {
+        const totals = PLANS.map(refTotal);
+        const min = Math.min(...totals), max = Math.max(...totals);
+        const pad = 5, span = max - min;
+        const pct = (v) => span === 0 ? 50 : pad + ((v - min) / span) * (100 - pad * 2);
+
+        const track = document.getElementById('price-ruler');
+        track.innerHTML = `
+            <div class="relative h-[3px] bg-slate-200 rounded-full mx-1">
+                ${PLANS.map((p, i) => `<div class="ruler-dot absolute top-1/2 w-3 h-3 rounded-full ring-2 ring-white" id="dot-${i}" style="left:${pct(totals[i])}%; transform:translate(-50%,-50%); background:${p.cor};" onclick="scrollToPlan(${i})" onmouseenter="highlightRuler(${i},true)" onmouseleave="highlightRuler(${i},false)"></div>`).join('')}
+            </div>
+            <div class="relative h-10 mt-1 mx-1">
+                ${PLANS.map((p, i) => `<div class="ruler-label absolute -translate-x-1/2 text-center" id="label-${i}" style="left:${pct(totals[i])}%;">
+                    <div class="text-[10px] font-bold mt-2 whitespace-nowrap" style="color:${p.cor}">${p.seguradora}</div>
+                    <div class="text-[9.5px] text-slate-400 whitespace-nowrap">R$ ${fmt(totals[i])}</div>
+                </div>`).join('')}
+            </div>`;
+
+        const cheapest = PLANS[totals.indexOf(min)].seguradora;
+        const priciest = PLANS[totals.indexOf(max)].seguradora;
+        const mult = (max / min).toFixed(1);
+        document.getElementById('ruler-caption').textContent =
+            `Do total mais baixo (${cheapest}) ao mais alto (${priciest}) tem ${mult}x de diferença de preço pro mesmo imóvel e a mesma cobertura básica.`;
+    }
+
+    function highlightRuler(i, on) {
+        document.getElementById('dot-' + i).classList.toggle('ruler-active', on);
+        document.getElementById('label-' + i).style.opacity = on ? '1' : '';
+        document.getElementById('label-' + i).style.transform = on ? 'translate(-50%,-2px)' : '';
+        const row = document.querySelector(`.plan-row[data-idx="${i}"]`);
+        if (row) row.classList.toggle('selected', on);
+    }
+
+    function scrollToPlan(i) {
+        const row = document.querySelector(`.plan-row[data-idx="${i}"]`);
+        row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        row.classList.add('selected');
+        setTimeout(() => row.classList.remove('selected'), 1500);
+    }
+
+    function renderPlans() {
+        const list = document.getElementById('plans-list');
+        list.innerHTML = PLANS.map((p, i) => `
+            <div class="plan-row relative bg-white border border-strat-border rounded-2xl p-6 lg:p-7 shadow-soft fade-in-up ${i === 0 ? 'is-best' : ''}" style="animation-delay:${0.1 + i * 0.08}s; border-left-color:${p.cor};" data-idx="${i}">
+
+                <div class="grid grid-cols-1 lg:grid-cols-[200px_150px_1fr_150px] gap-6 lg:gap-7 items-center">
+
+                    <div>
+                        <div class="flex items-center gap-2 flex-wrap">
+                            <span class="font-heading font-extrabold text-lg" style="color:${p.cor}">${p.seguradora}</span>
+                            ${p.badge ? `<span class="text-[9px] font-extrabold uppercase tracking-wide px-2 py-0.5 rounded-full bg-strat-amber/15 text-amber-700 border border-strat-amber/30">${p.badge.label}</span>` : ''}
+                        </div>
+                        <span class="text-[11px] font-semibold text-slate-400">${p.pagamento}</span>
+                    </div>
+
+                    <div class="flex items-center justify-center gap-1.5 lg:border-l lg:border-dashed lg:border-strat-border lg:pl-6">
+                        <button class="stepper-btn w-6 h-6 rounded-full border border-strat-border flex items-center justify-center flex-shrink-0" onclick="stepInstallment(${i},-1)" ${selected[i] === 0 ? 'disabled' : ''} id="prev-${i}">
+                            <i class="ph-bold ph-caret-left text-[10px]"></i>
+                        </button>
+                        <div class="w-24">${priceBlock(p, i)}</div>
+                        <button class="stepper-btn w-6 h-6 rounded-full border border-strat-border flex items-center justify-center flex-shrink-0" onclick="stepInstallment(${i},1)" ${selected[i] === p.parcelamento.length - 1 ? 'disabled' : ''} id="next-${i}">
+                            <i class="ph-bold ph-caret-right text-[10px]"></i>
+                        </button>
+                    </div>
+
+                    <div class="lg:border-l lg:border-dashed lg:border-strat-border lg:pl-7">
+                        <ul class="space-y-1.5">
+                            ${p.destaques.map(d => `<li class="flex items-start gap-2 text-[13px] text-slate-600 leading-snug"><i class="ph-bold ph-check-circle text-emerald-500 mt-0.5 flex-shrink-0"></i>${d}</li>`).join('')}
+                        </ul>
+                        ${p.atencao ? `<div class="flex items-start gap-2 text-[11.5px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg p-2 mt-2.5"><i class="ph-bold ph-warning-circle mt-0.5 flex-shrink-0"></i>${p.atencao}</div>` : ''}
+                    </div>
+
+                    <div class="flex flex-col gap-2.5 lg:items-end">
+                        <button class="cta-btn w-full lg:w-auto px-5 py-2.5 rounded-xl font-bold text-sm bg-strat-navy text-white hover:bg-strat-amber hover:text-strat-navy flex items-center justify-center gap-2" onclick="choosePlan(${i})">
+                            Quero esse <i class="ph-bold ph-arrow-right"></i>
+                        </button>
+                        <button class="accordion-toggle text-[11.5px] font-semibold text-slate-400 flex items-center justify-center lg:justify-end gap-1.5 hover:text-strat-royal transition-colors" onclick="toggleCoverage(${i})">
+                            Ver coberturas <i class="ph-bold ph-caret-down caret"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="accordion-wrapper" id="acc-${i}">
+                    <div>
+                        <table class="w-full mt-4 mb-2 border-t border-strat-border/70 pt-1">${coverageRows(p.coberturas)}</table>
+                        <div class="text-[10.5px] font-mono text-slate-400 pt-2 border-t border-strat-border/70">Orçamento nº ${p.orcamento} · Proposta válida até ${LEAD.validoAte}</div>
+                    </div>
+                </div>
+            </div>
+        `).join('');
+    }
+
+    function stepInstallment(i, dir) {
+        const max = PLANS[i].parcelamento.length - 1;
+        const next = Math.min(max, Math.max(0, selected[i] + dir));
+        if (next === selected[i]) return;
+        selected[i] = next;
+
+        const priceEl = document.getElementById('price-' + i);
+        priceEl.classList.add('fading');
+        setTimeout(() => {
+            priceEl.outerHTML = priceBlock(PLANS[i], i);
+            document.getElementById('price-' + i).classList.add('fading');
+            requestAnimationFrame(() => document.getElementById('price-' + i).classList.remove('fading'));
+        }, 150);
+
+        document.getElementById('prev-' + i).disabled = selected[i] === 0;
+        document.getElementById('next-' + i).disabled = selected[i] === max;
+    }
+
+    function toggleCoverage(i) {
+        const wrapper = document.getElementById('acc-' + i);
+        const toggle = wrapper.parentElement.querySelector('.accordion-toggle');
+        wrapper.classList.toggle('open');
+        toggle.classList.toggle('open');
+    }
+
+    function choosePlan(i) {
+        const card = document.querySelector(`.plan-row[data-idx="${i}"]`);
+        card.classList.add('selected');
+        setTimeout(() => card.classList.remove('selected'), 2200);
+        window.open(waLink(PLANS[i].seguradora), '_blank');
+    }
+
+    renderHero();
+    renderRuler();
+    renderPlans();
+    toggleCoverage(0); // a opção mais econômica já abre com os detalhes visíveis
+</script>
+
+</body>
+</html>
